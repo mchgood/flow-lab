@@ -88,6 +88,19 @@ public class MermaidLexer {
                     .build();
         }
 
+        // 箭头 -->
+        if (current == '-' && peekNext() == '-' && peekAhead(2) == '>') {
+            advance();
+            advance();
+            advance();
+            return Token.builder()
+                    .type(TokenType.ARROW)
+                    .value("-->")
+                    .line(startLine)
+                    .column(startColumn)
+                    .build();
+        }
+
         // 单字符符号
         switch (current) {
             case '[':
@@ -148,22 +161,25 @@ public class MermaidLexer {
                         .build();
         }
 
-        // 箭头 -->
-        if (current == '-' && peekNext() == '-' && peekAhead(2) == '>') {
-            advance();
-            advance();
-            advance();
-            return Token.builder()
-                    .type(TokenType.ARROW)
-                    .value("-->")
-                    .line(startLine)
-                    .column(startColumn)
-                    .build();
+        // 数字（用于边标签表达式等）
+        if (Character.isDigit(current)) {
+            return numberToken(startLine, startColumn);
         }
 
         // 标识符或关键字
         if (Character.isLetter(current) || current == '_') {
             return identifierOrKeyword(startLine, startColumn);
+        }
+
+        // 允许表达式中的符号字符
+        if (isTextSymbol(current)) {
+            advance();
+            return Token.builder()
+                    .type(TokenType.TEXT)
+                    .value(String.valueOf(current))
+                    .line(startLine)
+                    .column(startColumn)
+                    .build();
         }
 
         // 未识别字符
@@ -190,6 +206,32 @@ public class MermaidLexer {
                 .line(startLine)
                 .column(startColumn)
                 .build();
+    }
+
+    /**
+     * 解析数字文本
+     */
+    private Token numberToken(int startLine, int startColumn) {
+        StringBuilder sb = new StringBuilder();
+        while (!isAtEnd() && Character.isDigit(peek())) {
+            sb.append(peek());
+            advance();
+        }
+        return Token.builder()
+                .type(TokenType.TEXT)
+                .value(sb.toString())
+                .line(startLine)
+                .column(startColumn)
+                .build();
+    }
+
+    /**
+     * 表达式中允许的符号字符
+     */
+    private boolean isTextSymbol(char current) {
+        return current == '#' || current == '>' || current == '<' || current == '='
+                || current == '!' || current == '+' || current == '-' || current == '*'
+                || current == '/' || current == '.' || current == ':' || current == '?';
     }
 
     /**
