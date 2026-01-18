@@ -111,7 +111,7 @@ class ProcessEngineIntegrationTest {
     void testEventListenersInCompleteProcess() {
         // 创建事件监听器
         TestEventCounter eventCounter = new TestEventCounter();
-        List<EventListener> listeners = Arrays.asList(
+        List<com.gaibu.flowlab.engine.event.EventListener> listeners = Arrays.asList(
                 eventCounter.new ProcessStartedListener(),
                 eventCounter.new NodeStartedListener(),
                 eventCounter.new NodeCompletedListener(),
@@ -196,7 +196,7 @@ class ProcessEngineIntegrationTest {
         AtomicInteger nodeCompletedCount = new AtomicInteger(0);
         AtomicInteger processCompletedCount = new AtomicInteger(0);
 
-        class ProcessStartedListener implements EventListener<ProcessStartedEvent> {
+        class ProcessStartedListener implements com.gaibu.flowlab.engine.event.EventListener<ProcessStartedEvent> {
             @Override
             public void onEvent(ProcessStartedEvent event) {
                 processStartedCount.incrementAndGet();
@@ -208,7 +208,7 @@ class ProcessEngineIntegrationTest {
             }
         }
 
-        class NodeStartedListener implements EventListener<NodeStartedEvent> {
+        class NodeStartedListener implements com.gaibu.flowlab.engine.event.EventListener<NodeStartedEvent> {
             @Override
             public void onEvent(NodeStartedEvent event) {
                 nodeStartedCount.incrementAndGet();
@@ -220,7 +220,7 @@ class ProcessEngineIntegrationTest {
             }
         }
 
-        class NodeCompletedListener implements EventListener<NodeCompletedEvent> {
+        class NodeCompletedListener implements com.gaibu.flowlab.engine.event.EventListener<NodeCompletedEvent> {
             @Override
             public void onEvent(NodeCompletedEvent event) {
                 nodeCompletedCount.incrementAndGet();
@@ -232,7 +232,7 @@ class ProcessEngineIntegrationTest {
             }
         }
 
-        class ProcessCompletedListener implements EventListener<ProcessCompletedEvent> {
+        class ProcessCompletedListener implements com.gaibu.flowlab.engine.event.EventListener<ProcessCompletedEvent> {
             @Override
             public void onEvent(ProcessCompletedEvent event) {
                 processCompletedCount.incrementAndGet();
