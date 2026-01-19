@@ -1,70 +1,34 @@
 # Mermaid 流程图解析器
 
-一个将 Mermaid 语法的流程图转换为点线结构 JSON 的 Java 解析器。
+将 Mermaid 流程图解析为点线 JSON，并提供内存版流程执行引擎。
 
-## 📋 功能特性
+## 目录
+- [功能特性](#功能特性)
+- [架构与组件](#架构与组件)
+- [快速开始](#快速开始)
+- [输出示例](#输出示例)
+- [条件与标签约定](#条件与标签约定)
+- [测试](#测试)
+- [项目结构](#项目结构)
+- [设计文档](#设计文档)
+- [Roadmap](#roadmap)
 
-### ✅ 已支持的特性
+## 功能特性
+- **节点形状**：`[ ]` 矩形，`{ }` 菱形（决策），`(( ))` 圆形，`([ ])` 圆角矩形
+- **连接线**：`-->` 箭头；`-->|标签|` 展示标签
+- **流程方向**：`TD/TB`、`LR`、`RL`、`BT`
+- **子图**：`subgraph ... end`
 
-- **节点形状**
-  - `[文本]` - 矩形
-  - `{文本}` - 菱形（决策节点）
-  - `((文本))` - 圆形
-  - `([文本])` - 圆角矩形
+## 架构与组件
+编译链路：Lexer → Parser → AST → Transformer → FlowGraph → Engine
+- `parser.lexer`：`MermaidLexer`
+- `parser.syntax`：`MermaidParser`
+- `parser.ast`：`FlowchartAST/Node/Edge/Subgraph`
+- `transformer`：`MermaidTransformer`（统一收集节点、生成点线结构）
+- `service`：`FlowParserService`（解析入口，提供 JSON/校验）
+- `engine`：内存流程引擎（执行器注册表、表达式、事件、仓库）
 
-- **连接线**
-  - `-->` - 实线箭头
-  - `-->|标签|` - 带标签的箭头
-
-- **流程图方向**
-  - `TD` / `TB` - 从上到下
-  - `LR` - 从左到右
-  - `RL` - 从右到左
-  - `BT` - 从下到上
-
-- **子图**
-  - `subgraph ... end` - 子图定义
-
-## 🏗️ 技术架构
-
-基于经典的编译原理技术栈：
-
-```
-Mermaid 文本
-    ↓
-词法分析器 (Lexer) - 将文本转换为 Token 序列
-    ↓
-语法分析器 (Parser) - 构建抽象语法树 (AST)
-    ↓
-转换器 (Transformer) - 转换为点线结构 JSON
-    ↓
-点线 JSON
-```
-
-### 核心组件
-
-- **com.gaibu.flowlab.parser.lexer** - 词法分析
-  - `MermaidLexer` - 词法分析器
-  - `Token` / `TokenType` - Token 定义
-
-- **com.gaibu.flowlab.parser.syntax** - 语法分析
-  - `MermaidParser` - 递归下降语法分析器
-
-- **com.gaibu.flowlab.parser.ast** - 抽象语法树
-  - `FlowchartAST` - 流程图 AST
-  - `FlowchartNode` - 节点
-  - `EdgeNode` - 边
-  - `SubgraphNode` - 子图
-
-- **com.gaibu.flowlab.transformer** - 转换器
-  - `MermaidTransformer` - AST 到 JSON 转换
-
-- **com.gaibu.flowlab.service** - 服务层
-  - `FlowParserService` - 统一解析服务入口
-
-## 🚀 快速开始
-
-### 基本使用
+## 快速开始
 
 ```java
 import com.gaibu.flowlab.service.FlowParserService;
@@ -99,152 +63,88 @@ String compactJson = service.parseToCompactJson(mermaid);
 boolean isValid = service.validate(mermaid);
 ```
 
-### 输出示例
-
-对于上面的 Mermaid 流程图，输出的 JSON 结构如下：
+## 输出示例
 
 ```json
 {
   "nodes": [
-    {
-      "id": "A",
-      "label": "开始",
-      "type": "rectangle",
-      "shape": "rectangle"
-    },
-    {
-      "id": "B",
-      "label": "判断",
-      "type": "diamond",
-      "shape": "diamond"
-    },
-    {
-      "id": "C",
-      "label": "处理A",
-      "type": "rectangle",
-      "shape": "rectangle"
-    },
-    {
-      "id": "D",
-      "label": "处理B",
-      "type": "rectangle",
-      "shape": "rectangle"
-    },
-    {
-      "id": "E",
-      "label": "结束",
-      "type": "circle",
-      "shape": "circle"
-    }
+    { "id": "A", "label": "开始", "type": "rectangle", "shape": "rectangle" },
+    { "id": "B", "label": "判断", "type": "diamond", "shape": "diamond" },
+    { "id": "C", "label": "处理A", "type": "rectangle", "shape": "rectangle" },
+    { "id": "D", "label": "处理B", "type": "rectangle", "shape": "rectangle" },
+    { "id": "E", "label": "结束", "type": "circle", "shape": "circle" }
   ],
   "edges": [
-    {
-      "from": "A",
-      "to": "B",
-      "label": ""
-    },
-    {
-      "from": "B",
-      "to": "C",
-      "label": "是"
-    },
-    {
-      "from": "B",
-      "to": "D",
-      "label": "否"
-    },
-    {
-      "from": "C",
-      "to": "E",
-      "label": ""
-    },
-    {
-      "from": "D",
-      "to": "E",
-      "label": ""
-    }
+    { "from": "A", "to": "B", "label": "" },
+    { "from": "B", "to": "C", "label": "是" },
+    { "from": "B", "to": "D", "label": "否" },
+    { "from": "C", "to": "E", "label": "" },
+    { "from": "D", "to": "E", "label": "" }
   ]
 }
 ```
 
-## 🧪 测试
+## 条件与标签约定
+- 展示标签：`-->|是|` → `label="是"`，不会求值。
+- 条件表达式：`-->|? #amount > 1000|` → `condition="#amount > 1000"`，由表达式引擎判定。
+- 未标记条件的边视为无条件分支。
 
-项目包含完整的单元测试：
-
+## 测试
 ```bash
 # 运行所有测试
 ./mvnw test
 
 # 运行特定测试
 ./mvnw test -Dtest=MermaidLexerTest
+./mvnw test -Dtest=MermaidParserTest
+./mvnw test -Dtest=MermaidTransformerTest
 ./mvnw test -Dtest=FlowParserServiceTest
+./mvnw test -Dtest=ProcessEngineTest
 ```
 
-测试覆盖：
-- ✅ 词法分析器测试（8个测试用例）
-- ✅ 服务层集成测试（13个测试用例）
-- ✅ 所有测试通过率：100%
-
-## 📦 项目结构
-
+## 项目结构
 ```
-src/main/java/com/gaibu/flowlab/
-├── exception/              # 异常定义
-│   ├── ParseException.java
-│   └── ValidationException.java
-├── parser/                 # 解析器
-│   ├── lexer/             # 词法分析
-│   │   ├── Token.java
-│   │   ├── TokenType.java
-│   │   └── MermaidLexer.java
-│   ├── ast/               # 抽象语法树
-│   │   ├── ASTNode.java
-│   │   ├── FlowchartAST.java
-│   │   ├── FlowchartNode.java
-│   │   ├── EdgeNode.java
-│   │   ├── SubgraphNode.java
-│   │   └── NodeShape.java
-│   └── syntax/            # 语法分析
-│       └── MermaidParser.java
-├── transformer/           # 转换器
-│   ├── model/            # 输出数据模型
-│   │   ├── Node.java
-│   │   ├── Edge.java
-│   │   └── FlowGraph.java
-│   └── MermaidTransformer.java
-└── service/              # 服务层
-    └── FlowParserService.java
+flow-lab/
+├── doc/                          # 设计与测试文档
+├── mvnw*                         # Maven wrapper
+├── pom.xml
+├── src
+│   ├── main/java/com/gaibu/flowlab
+│   │   ├── FlowLabApplication.java
+│   │   ├── parser/               # 词法/语法/AST
+│   │   │   ├── lexer/            # MermaidLexer, Token, TokenType
+│   │   │   ├── ast/              # FlowchartAST/Node/Edge/Subgraph, NodeShape
+│   │   │   └── syntax/           # MermaidParser
+│   │   ├── transformer/          # AST → FlowGraph
+│   │   │   ├── MermaidTransformer.java
+│   │   │   └── model/            # Node, Edge(condition/label), FlowGraph
+│   │   ├── service/              # FlowParserService
+│   │   ├── engine/               # 内存流程引擎
+│   │   │   ├── core/             # ProcessEngine
+│   │   │   ├── executor/         # Start/Task/Decision/End 及注册表
+│   │   │   ├── expression/       # SpELExpressionEngine
+│   │   │   ├── event/            # 事件与发布器
+│   │   │   ├── model/            # ProcessDefinition/Instance/ExecutionContext...
+│   │   │   ├── repository/       # 内存仓库
+│   │   │   └── service/          # 定义/实例服务
+│   │   └── exception/            # ParseException, ValidationException
+│   ├── main/resources
+│   │   └── application.properties
+│   └── test/java/com/gaibu/flowlab
+│       ├── parser/lexer|syntax   # MermaidLexerTest, MermaidParserTest
+│       ├── transformer/          # MermaidTransformerTest
+│       ├── service/              # FlowParserServiceTest
+│       └── engine/               # 执行器、引擎、事件、仓库、集成测试
+└── target/                       # Maven 编译产物（不需提交）
 ```
 
-## 🔧 技术栈
+## 设计文档
+- `doc/流程引擎设计文档.md`：执行引擎设计与演进
+- `doc/测试用例设计方案.md`：测试分层与用例索引
+- `doc/Mermaid流程图解析器技术方案.md`：解析与转换细节
 
-- **Java 17**
-- **Spring Boot 4.0.1**
-- **Jackson** - JSON 序列化
-- **Lombok** - 减少样板代码
-- **JUnit 5** - 单元测试
-- **AssertJ** - 测试断言
-
-## 📚 技术方案
-
-详细的技术设计文档请查看：[doc/Mermaid流程图解析器技术方案.md](doc/Mermaid流程图解析器技术方案.md)
-
-## ⚠️ 当前限制
-
-暂不支持的 Mermaid 特性：
-- ❌ 虚线、粗线等其他连接线类型
-- ❌ 样式定义（classDef、style）
-- ❌ 点击事件
-- ❌ 注释
-
-## 🎯 使用场景
-
-这个解析器适合以下场景：
-1. **流程引擎** - 将 Mermaid 流程图转换为可执行的流程定义
-2. **可视化编辑器** - 为流程图编辑器提供数据支持
-3. **流程分析** - 分析流程图结构、节点关系等
-4. **文档生成** - 自动化生成流程文档
-
-## 📄 许可证
-
-本项目遵循 MIT 许可证。
+## Roadmap
+- 统一节点形状语法与枚举的支持策略
+- start/end 显式标记与执行器注册完善
+- 条件/标签配置开关与表达式异常降级
+- 引擎并发/异步调度与持久化仓库接口化
