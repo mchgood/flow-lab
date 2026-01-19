@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gaibu.flowlab.exception.ParseException;
 import com.gaibu.flowlab.parser.ast.FlowchartAST;
-import com.gaibu.flowlab.parser.ast.FlowchartNode;
 import com.gaibu.flowlab.parser.lexer.MermaidLexer;
 import com.gaibu.flowlab.parser.lexer.Token;
 import com.gaibu.flowlab.parser.syntax.MermaidParser;
@@ -13,8 +12,6 @@ import com.gaibu.flowlab.transformer.model.FlowGraph;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Map;
-
 /**
  * 流程解析服务
  * 提供 Mermaid 流程图解析的统一入口
@@ -49,25 +46,9 @@ public class FlowParserService {
             MermaidParser parser = new MermaidParser(tokens);
             FlowchartAST ast = parser.parse();
 
-            // 3. 获取解析器的节点注册表
-            Map<String, FlowchartNode> nodeRegistry = parser.getNodeRegistry();
-
-            // 4. 转换为 FlowGraph
+            // 3. 转换为 FlowGraph（预加载节点以保留标签与形状）
             MermaidTransformer transformer = new MermaidTransformer();
-
-            // 将解析器中的节点添加到转换器
-            for (FlowchartNode node : nodeRegistry.values()) {
-                transformer.getNodeMap().put(
-                    node.getId(),
-                    com.gaibu.flowlab.transformer.model.Node.builder()
-                        .id(node.getId())
-                        .label(node.getLabel())
-                        .type(node.getShape().getValue())
-                        .shape(node.getShape().getValue())
-                        .build()
-                );
-            }
-
+            transformer.preloadNodes(parser.getNodeRegistry());
             FlowGraph flowGraph = transformer.transform(ast);
 
             return flowGraph;

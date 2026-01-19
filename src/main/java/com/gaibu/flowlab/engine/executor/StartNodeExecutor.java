@@ -25,7 +25,8 @@ public class StartNodeExecutor implements NodeExecutor {
 
     @Override
     public boolean validate(Node node) {
-        // 验证节点是否为圆形
-        return "circle".equals(node.getShape());
+        // 验证节点是否为圆形且标记为 start
+        return "circle".equals(node.getShape())
+                && ("start".equalsIgnoreCase(node.getLabel()) || "start".equalsIgnoreCase(node.getId()));
     }
 }

@@ -27,7 +27,9 @@ public class EndNodeExecutor implements NodeExecutor {
 
     @Override
     public boolean validate(Node node) {
-        // 验证节点是否为圆形
-        return "circle".equals(node.getShape());
+        // 验证节点是否为圆形且标记为 end/stop
+        return "circle".equals(node.getShape()) &&
+                ("end".equalsIgnoreCase(node.getLabel()) || "stop".equalsIgnoreCase(node.getLabel())
+                        || "end".equalsIgnoreCase(node.getId()) || "stop".equalsIgnoreCase(node.getId()));
     }
 }

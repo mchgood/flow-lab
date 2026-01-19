@@ -54,12 +54,14 @@ class MermaidTransformerTest {
                 .fromId("A")
                 .toId("B")
                 .label("")
+                .condition("")
                 .build();
 
         EdgeNode edgeBC = EdgeNode.builder()
                 .fromId("B")
                 .toId("C")
                 .label("toC")
+                .condition("?x>0")
                 .build();
 
         SubgraphNode subgraph = SubgraphNode.builder()
@@ -92,18 +94,33 @@ class MermaidTransformerTest {
                 .orElse(null);
         assertThat(edge).isNotNull();
         assertThat(edge.getLabel()).isEqualTo("toC");
+        assertThat(edge.getCondition()).isEqualTo("?x>0");
     }
 
     @Test
-    void testAddImplicitNode() {
-        MermaidTransformer transformer = new MermaidTransformer();
-        transformer.addImplicitNode("X");
-        transformer.addImplicitNode("X");
+    void testImplicitNodesCreatedFromEdges() {
+        // Edge references nodes not declared elsewhere
+        EdgeNode edge = EdgeNode.builder()
+                .fromId("X")
+                .toId("Y")
+                .label("")
+                .condition("")
+                .build();
 
-        assertThat(transformer.getNodeMap()).hasSize(1);
-        Node node = transformer.getNodeMap().get("X");
-        assertThat(node).isNotNull();
-        assertThat(node.getLabel()).isEqualTo("X");
-        assertThat(node.getShape()).isEqualTo("rectangle");
+        FlowchartAST ast = FlowchartAST.builder()
+                .direction("TD")
+                .statements(List.of(edge))
+                .build();
+
+        MermaidTransformer transformer = new MermaidTransformer();
+        FlowGraph graph = transformer.transform(ast);
+
+        assertThat(graph.getNodes()).hasSize(2);
+        Node nodeX = graph.getNodes().stream().filter(n -> "X".equals(n.getId())).findFirst().orElse(null);
+        Node nodeY = graph.getNodes().stream().filter(n -> "Y".equals(n.getId())).findFirst().orElse(null);
+        assertThat(nodeX).isNotNull();
+        assertThat(nodeY).isNotNull();
+        assertThat(nodeX.getShape()).isEqualTo("rectangle");
+        assertThat(nodeY.getShape()).isEqualTo("rectangle");
     }
 }

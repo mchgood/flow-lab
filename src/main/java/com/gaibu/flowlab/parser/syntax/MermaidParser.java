@@ -288,12 +288,20 @@ public class MermaidParser {
 
         // 检查是否有标签 -->|label|
         String edgeLabel = "";
+        String edgeCondition = "";
         if (match(TokenType.PIPE)) {
             edgeLabel = parseTextUntil(TokenType.PIPE);
             if (!match(TokenType.PIPE)) {
                 throw new ParseException("期望 '|'", getCurrentLine(), getCurrentColumn());
             }
             skipWhitespaceTokens();
+
+            // 约定：以 '?' 开头的标签代表条件表达式，其余为展示标签
+            String trimmed = edgeLabel.trim();
+            if (trimmed.startsWith("?")) {
+                edgeCondition = trimmed.substring(1).trim();
+                edgeLabel = "";
+            }
         }
 
         // 解析目标节点
@@ -324,6 +332,7 @@ public class MermaidParser {
                 .fromId(fromId)
                 .toId(toId)
                 .label(edgeLabel)
+                .condition(edgeCondition)
                 .build();
     }
 

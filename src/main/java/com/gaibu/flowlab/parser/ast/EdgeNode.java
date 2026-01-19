@@ -26,11 +26,17 @@ public class EdgeNode extends ASTNode {
      */
     private String label;
 
+    /**
+     * 条件表达式（可选，SpEL）
+     */
+    private String condition;
+
     @Builder
-    public EdgeNode(String fromId, String toId, String label) {
+    public EdgeNode(String fromId, String toId, String label, String condition) {
         super(ASTNodeType.EDGE);
         this.fromId = fromId;
         this.toId = toId;
         this.label = label != null ? label : "";
+        this.condition = condition != null ? condition : "";
     }
 }

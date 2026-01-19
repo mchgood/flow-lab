@@ -57,8 +57,8 @@ public class ProcessEngine {
             instance.setStatus(ProcessInstanceStatus.RUNNING);
             instance.setCurrentNodeId(startNode.getId());
 
-            // 5. 从开始节点开始执行
-            executeNode(instance, flowGraph, startNode.getId());
+            // 5. 从开始节点开始执行（迭代调度，包含循环检测）
+            executeIterative(instance, flowGraph, startNode.getId());
 
         } catch (Exception e) {
             // 执行失败，终止流程
@@ -69,42 +69,52 @@ public class ProcessEngine {
     }
 
     /**
-     * 执行单个节点
+     * 迭代执行节点，带循环检测与最大步数保护
      */
-    private void executeNode(ProcessInstance instance, FlowGraph flowGraph, String nodeId) {
-        Node node = getNodeById(flowGraph, nodeId);
-        if (node == null) {
-            throw new IllegalStateException("Node not found: " + nodeId);
-        }
+    private void executeIterative(ProcessInstance instance, FlowGraph flowGraph, String startNodeId) {
+        final int MAX_STEPS = 1000;
+        int steps = 0;
+        List<String> pending = new ArrayList<>();
+        pending.add(startNodeId);
 
-        // 1. 发布节点开始事件
-        eventPublisher.publish(new NodeStartedEvent(instance, nodeId, node.getLabel()));
+        while (!pending.isEmpty()) {
+            if (steps++ > MAX_STEPS) {
+                throw new IllegalStateException("Process exceeded maximum step limit, possible loop detected.");
+            }
 
-        // 2. 获取节点执行器
-        NodeExecutor executor = executorRegistry.getExecutor(node.getShape());
+            String nodeId = pending.remove(0);
+            Node node = getNodeById(flowGraph, nodeId);
+            if (node == null) {
+                throw new IllegalStateException("Node not found: " + nodeId);
+            }
 
-        // 3. 执行节点
-        NodeExecutionResult result = executor.execute(node, instance.getContext());
+            instance.setCurrentNodeId(nodeId);
 
-        // 4. 发布节点完成事件
-        eventPublisher.publish(new NodeCompletedEvent(instance, nodeId, result));
+            // 1. 发布节点开始事件
+            eventPublisher.publish(new NodeStartedEvent(instance, nodeId, node.getLabel()));
 
-        // 5. 根据执行结果决定下一步
-        if (result.isSuccess()) {
+            // 2. 获取节点执行器（按节点特征匹配）
+            NodeExecutor executor = executorRegistry.getExecutor(node);
+
+            // 3. 执行节点
+            NodeExecutionResult result = executor.execute(node, instance.getContext());
+
+            // 4. 发布节点完成事件
+            eventPublisher.publish(new NodeCompletedEvent(instance, nodeId, result));
+
+            if (!result.isSuccess()) {
+                suspendProcess(instance, result.getErrorMessage());
+                return;
+            }
+
+            // 5. 决定下一步
             List<String> nextNodeIds = determineNextNodes(flowGraph, nodeId, instance.getContext());
             if (nextNodeIds.isEmpty()) {
-                // 流程结束
                 completeProcess(instance);
-            } else {
-                // 继续执行下一个节点
-                for (String nextNodeId : nextNodeIds) {
-                    instance.setCurrentNodeId(nextNodeId);
-                    executeNode(instance, flowGraph, nextNodeId);
-                }
+                return;
             }
-        } else {
-            // 节点执行失败，暂停流程
-            suspendProcess(instance, result.getErrorMessage());
+
+            pending.addAll(nextNodeIds);
         }
     }
 
@@ -116,16 +126,16 @@ public class ProcessEngine {
         List<String> nextNodeIds = new ArrayList<>();
 
         for (Edge edge : outgoingEdges) {
-            // 如果边有条件标签，则评估表达式
-            if (edge.getLabel() != null && !edge.getLabel().isEmpty()) {
+            // 如果边有条件表达式，则评估
+            if (edge.getCondition() != null && !edge.getCondition().isEmpty()) {
                 try {
-                    boolean conditionMet = expressionEngine.evaluate(edge.getLabel(), context);
+                    boolean conditionMet = expressionEngine.evaluate(edge.getCondition(), context);
                     if (conditionMet) {
                         nextNodeIds.add(edge.getTo());
                     }
                 } catch (Exception e) {
                     // 表达式评估失败，记录日志但继续
-                    System.err.println("Failed to evaluate expression: " + edge.getLabel() + ", error: " + e.getMessage());
+                    System.err.println("Failed to evaluate expression: " + edge.getCondition() + ", error: " + e.getMessage());
                 }
             } else {
                 // 无条件边，直接添加
@@ -158,15 +168,25 @@ public class ProcessEngine {
      */
     private Node findStartNode(FlowGraph flowGraph) {
         for (Node node : flowGraph.getNodes()) {
-            if ("circle".equals(node.getShape())) {
-                // 检查是否有入边，没有入边的圆形节点是开始节点
-                List<Edge> incomingEdges = getIncomingEdges(flowGraph, node.getId());
-                if (incomingEdges.isEmpty()) {
-                    return node;
-                }
+            if (isStartNode(flowGraph, node)) {
+                return node;
             }
         }
         return null;
+    }
+
+    private boolean isStartNode(FlowGraph flowGraph, Node node) {
+        if ("start".equalsIgnoreCase(node.getShape())
+                || "start".equalsIgnoreCase(node.getLabel())
+                || "start".equalsIgnoreCase(node.getId())) {
+            return true;
+        }
+        if ("circle".equals(node.getShape())) {
+            // 圆形且无入边时作为回退方案
+            List<Edge> incomingEdges = getIncomingEdges(flowGraph, node.getId());
+            return incomingEdges.isEmpty();
+        }
+        return false;
     }
 
     /**

@@ -80,8 +80,26 @@ class MermaidParserTest {
 
         EdgeNode edge = findFirstEdge(ast.getStatements(), "B", "C");
         assertThat(edge).isNotNull();
-        // 空格会被词法阶段跳过，标签会被拼接为无空格表达式
+        // 普通标签保持为展示标签，不作为条件
         assertThat(edge.getLabel()).isEqualTo("#amount>1000");
+        assertThat(edge.getCondition()).isEmpty();
+    }
+
+    @Test
+    void testParseEdgeConditionPrefix() {
+        String mermaid = """
+                flowchart TD
+                    A((开始)) --> B{判断}
+                    B -->|?#amount > 1000| C[高额审批]
+                """;
+
+        MermaidParser parser = new MermaidParser(new MermaidLexer(mermaid).tokenize());
+        FlowchartAST ast = parser.parse();
+
+        EdgeNode edge = findFirstEdge(ast.getStatements(), "B", "C");
+        assertThat(edge).isNotNull();
+        assertThat(edge.getLabel()).isEqualTo("");
+        assertThat(edge.getCondition()).isEqualTo("#amount>1000");
     }
 
     @Test

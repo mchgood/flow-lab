@@ -21,6 +21,16 @@ public class MermaidTransformer {
     }
 
     /**
+     * 预加载解析阶段收集的节点，保留标签与形状
+     */
+    public void preloadNodes(Map<String, FlowchartNode> registry) {
+        if (registry == null) {
+            return;
+        }
+        registry.values().forEach(this::addNode);
+    }
+
+    /**
      * 转换 AST 为 FlowGraph
      */
     public FlowGraph transform(FlowchartAST ast) {
@@ -81,11 +91,15 @@ public class MermaidTransformer {
      * 处理边
      */
     private void processEdge(EdgeNode edgeNode, FlowGraph flowGraph) {
+        ensureNodeExists(edgeNode.getFromId());
+        ensureNodeExists(edgeNode.getToId());
+
         // 创建边
         Edge edge = Edge.builder()
                 .from(edgeNode.getFromId())
                 .to(edgeNode.getToId())
                 .label(edgeNode.getLabel() != null ? edgeNode.getLabel() : "")
+                .condition(edgeNode.getCondition() != null ? edgeNode.getCondition() : "")
                 .build();
 
         flowGraph.addEdge(edge);
@@ -120,20 +134,18 @@ public class MermaidTransformer {
     }
 
     /**
-     * 添加隐式节点（从边定义中）
+     * 确保节点存在（隐式节点默认矩形）
      */
-    public void addImplicitNode(String nodeId) {
+    private void ensureNodeExists(String nodeId) {
         if (nodeMap.containsKey(nodeId)) {
             return;
         }
-
         Node node = Node.builder()
                 .id(nodeId)
                 .label(nodeId)
                 .type("rectangle")
                 .shape("rectangle")
                 .build();
-
         nodeMap.put(nodeId, node);
     }
 

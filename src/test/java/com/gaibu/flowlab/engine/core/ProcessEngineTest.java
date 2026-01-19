@@ -74,12 +74,12 @@ class ProcessEngineTest {
     @Test
     @DisplayName("PEN-002: 执行带条件分支的流程（条件为真）")
     void testExecuteConditionalProcessWithTrueCondition() {
-        // 创建流程：开始→决策→任务A/任务B→结束（使用简单标签）
+        // 创建流程：开始→决策→任务A/任务B→结束（使用条件前缀）
         String mermaidSource = """
                 flowchart TD
-                    A((开始)) --> B{判断}
-                    B -->|是| C[任务A]
-                    B -->|否| D[任务B]
+                    A((start)) --> B{判断}
+                    B -->|?#amount > 1000| C[任务A]
+                    B -->|?#amount <= 1000| D[任务B]
                     C --> E((结束))
                     D --> E
                 """;
@@ -98,12 +98,12 @@ class ProcessEngineTest {
     @Test
     @DisplayName("PEN-003: 执行带条件分支的流程（条件为假）")
     void testExecuteConditionalProcessWithFalseCondition() {
-        // 创建流程：开始→决策→任务A/任务B→结束（使用简单标签）
+        // 创建流程：开始→决策→任务A/任务B→结束（使用条件前缀）
         String mermaidSource = """
                 flowchart TD
-                    A((开始)) --> B{判断}
-                    B -->|是| C[任务A]
-                    B -->|否| D[任务B]
+                    A((start)) --> B{判断}
+                    B -->|?#amount > 1000| C[任务A]
+                    B -->|?#amount <= 1000| D[任务B]
                     C --> E((结束))
                     D --> E
                 """;
@@ -117,6 +117,24 @@ class ProcessEngineTest {
 
         // 验证流程完成
         assertThat(instance.getStatus()).isEqualTo(ProcessInstanceStatus.COMPLETED);
+    }
+
+    @Test
+    @DisplayName("PEN-011: 含环流程触发循环保护")
+    void testLoopDetection() {
+        String mermaidSource = """
+                flowchart TD
+                    A((start)) --> B[任务]
+                    B --> B
+                """;
+
+        ProcessInstance instance = createProcessInstance();
+
+        assertThatThrownBy(() -> engine.execute(instance, mermaidSource))
+                .isInstanceOf(RuntimeException.class)
+                .hasCauseInstanceOf(IllegalStateException.class)
+                .satisfies(ex -> assertThat(ex.getCause().getMessage())
+                        .contains("maximum step"));
     }
 
     @Test
