@@ -142,6 +142,14 @@ flow-lab/
 - `doc/流程引擎设计文档.md`：执行引擎设计与演进
 - `doc/测试用例设计方案.md`：测试分层与用例索引
 - `doc/Mermaid流程图解析器技术方案.md`：解析与转换细节
+### 流程引擎快速概览
+- **执行模型**：内存同步执行，迭代调度（含最大步数与循环检测）
+- **起止节点规则**：优先识别 `start`/`end` 标记；次优为无入边的圆形起点
+- **条件分支**：边的 `condition`（来源 `|? expr|`）由 SpEL 评估；`label` 仅展示
+- **执行器分发**：`NodeExecutorRegistry` 支持同形状多执行器，按 `validate` 选择
+- **事件流**：`ProcessStarted/NodeStarted/NodeCompleted/ProcessCompleted`，监听器异常不阻断流程
+- **仓库实现**：内存版 `ProcessDefinitionRepository`、`ProcessInstanceRepository`
+- 详情参见 `doc/流程引擎设计文档.md`
 
 ## Roadmap
 - 统一节点形状语法与枚举的支持策略
