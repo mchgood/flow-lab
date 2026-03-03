@@ -51,6 +51,11 @@ public class ProcessInstance {
     private String interruptReason;
 
     /**
+     * 流程失败原因，仅 status=FAILED 时有效。
+     */
+    private Throwable failureCause;
+
+    /**
      * Token 索引（key=tokenId），用于快速定位 Token。
      */
     private final Map<TokenId, Token> tokensById = new LinkedHashMap<>();

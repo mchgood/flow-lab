@@ -8,9 +8,9 @@ import com.gaibu.flowlab.engine.execution.TokenFactory;
 import com.gaibu.flowlab.engine.expression.impl.SpelExpressionEngine;
 import com.gaibu.flowlab.engine.graph.ExecutableGraph;
 import com.gaibu.flowlab.engine.graph.GraphCompiler;
-import com.gaibu.flowlab.engine.interceptor.NodeExecutionTemplate;
 import com.gaibu.flowlab.engine.interceptor.NodeInterceptor;
 import com.gaibu.flowlab.engine.interceptor.ProcessInterceptor;
+import com.gaibu.flowlab.engine.interceptor.ProcessInterceptorChain;
 import com.gaibu.flowlab.engine.runtime.Execution;
 import com.gaibu.flowlab.engine.runtime.ExecutionId;
 import com.gaibu.flowlab.engine.runtime.ProcessInstance;
@@ -96,6 +96,11 @@ public class DefaultProcessEngine implements ProcessEngine {
     private final ExecutionLoop executionLoop;
 
     /**
+     * 流程拦截器分发器。
+     */
+    private final ProcessInterceptorChain processInterceptorChain;
+
+    /**
      * 执行轨迹存储。
      */
     private final ExecutionTraceStore traceStore;
@@ -120,7 +125,8 @@ public class DefaultProcessEngine implements ProcessEngine {
         this.traceRenderer = new ExecutionTraceMermaidRenderer(traceStore);
         this.graphCompiler = new GraphCompiler(new NodeBehaviorFactory(new SpelExpressionEngine(), taskRegistry, this::launchSubProcess));
         TokenFactory tokenFactory = new TokenFactory(idSeq);
-        this.executionLoop = new ExecutionLoop(new NodeExecutionTemplate(), new InstructionHandler(tokenFactory));
+        this.executionLoop = new ExecutionLoop(new InstructionHandler(tokenFactory));
+        this.processInterceptorChain = new ProcessInterceptorChain();
         this.nodeInterceptors.add(new TraceNodeInterceptor(traceStore));
     }
 
@@ -132,7 +138,8 @@ public class DefaultProcessEngine implements ProcessEngine {
         TaskRegistry springRegistry = new SpringBeanTaskRegistry(applicationContext);
         this.graphCompiler = new GraphCompiler(new NodeBehaviorFactory(new SpelExpressionEngine(), springRegistry, this::launchSubProcess));
         TokenFactory tokenFactory = new TokenFactory(idSeq);
-        this.executionLoop = new ExecutionLoop(new NodeExecutionTemplate(), new InstructionHandler(tokenFactory));
+        this.executionLoop = new ExecutionLoop(new InstructionHandler(tokenFactory));
+        this.processInterceptorChain = new ProcessInterceptorChain();
         this.nodeInterceptors.add(new TraceNodeInterceptor(traceStore));
     }
 
@@ -207,40 +214,6 @@ public class DefaultProcessEngine implements ProcessEngine {
         return traceRenderer.render(instanceId);
     }
 
-    private void runLoop(ProcessInstance instance, ExecutableGraph graph, InMemoryScheduler scheduler) {
-        try {
-            executionLoop.run(instance, graph, scheduler, nodeInterceptors);
-            refreshInstanceStatus(instance);
-            if (instance.getStatus() == InstanceStatus.COMPLETED) {
-                for (ProcessInterceptor interceptor : processInterceptors) {
-                    interceptor.onCompleted(instance);
-                }
-            }
-        } catch (Exception ex) {
-            instance.setStatus(InstanceStatus.FAILED);
-            for (ProcessInterceptor interceptor : processInterceptors) {
-                interceptor.onFailed(instance, ex);
-            }
-            throw ex;
-        }
-    }
-
-    private void refreshInstanceStatus(ProcessInstance instance) {
-        if (instance.getStatus() == InstanceStatus.INTERRUPTED) {
-            return;
-        }
-        boolean hasFailed = instance.getTokensById().values().stream().anyMatch(token -> token.getStatus() == TokenStatus.FAILED);
-        if (hasFailed || instance.getStatus() == InstanceStatus.FAILED) {
-            instance.setStatus(InstanceStatus.FAILED);
-            return;
-        }
-        if (!instance.getActiveTokens().isEmpty()) {
-            instance.setStatus(InstanceStatus.RUNNING);
-            return;
-        }
-        instance.setStatus(InstanceStatus.COMPLETED);
-    }
-
     private ProcessInstance requireInstance(String instanceId) {
         ProcessInstance instance = instances.get(instanceId);
         if (instance == null) {
@@ -280,9 +253,7 @@ public class DefaultProcessEngine implements ProcessEngine {
         Token rootToken = new TokenFactory(idSeq).create(graph.startNodeId(), rootExecution);
         instance.addToken(rootToken);
 
-        for (ProcessInterceptor interceptor : processInterceptors) {
-            interceptor.beforeStart(instance);
-        }
+        processInterceptorChain.beforeStart(processInterceptors, instance);
 
         InMemoryScheduler scheduler = new InMemoryScheduler();
         scheduler.schedule(rootToken);
@@ -290,8 +261,49 @@ public class DefaultProcessEngine implements ProcessEngine {
         instances.put(instance.getId(), instance);
         processIdByInstance.put(instance.getId(), processId);
 
-        runLoop(instance, graph, scheduler);
+        executeProcess(instance, graph, scheduler);
         return instance;
+    }
+
+    private void executeProcess(ProcessInstance instance, ExecutableGraph graph, InMemoryScheduler scheduler) {
+        try {
+            executionLoop.run(instance, graph, scheduler, nodeInterceptors);
+            refreshInstanceStatus(instance);
+        } catch (Exception ex) {
+            instance.setStatus(InstanceStatus.FAILED);
+            instance.setFailureCause(ex);
+            if (instance.getVariables() != null) {
+                instance.getVariables().put("process.error", ex);
+                instance.getVariables().put("process.error.message", ex.getMessage());
+                instance.getVariables().put("process.error.type", ex.getClass().getName());
+            }
+        }
+
+        if (instance.getStatus() == InstanceStatus.FAILED) {
+            Throwable ex = instance.getFailureCause();
+            if (ex == null) {
+                ex = new IllegalStateException("Process finished with FAILED status, instanceId=" + instance.getId());
+            }
+            processInterceptorChain.onFailed(processInterceptors, instance, ex);
+            return;
+        }
+        processInterceptorChain.onCompleted(processInterceptors, instance);
+    }
+
+    private void refreshInstanceStatus(ProcessInstance instance) {
+        if (instance.getStatus() == InstanceStatus.INTERRUPTED) {
+            return;
+        }
+        boolean hasFailed = instance.getTokensById().values().stream().anyMatch(token -> token.getStatus() == TokenStatus.FAILED);
+        if (hasFailed || instance.getStatus() == InstanceStatus.FAILED) {
+            instance.setStatus(InstanceStatus.FAILED);
+            return;
+        }
+        if (!instance.getActiveTokens().isEmpty()) {
+            instance.setStatus(InstanceStatus.RUNNING);
+            return;
+        }
+        instance.setStatus(InstanceStatus.COMPLETED);
     }
 
     private void launchSubProcess(String subProcessId, VariableStore sharedVariables) {

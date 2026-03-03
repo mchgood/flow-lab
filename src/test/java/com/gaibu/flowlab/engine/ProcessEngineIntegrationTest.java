@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ProcessEngineIntegrationTest {
 
@@ -126,10 +125,12 @@ class ProcessEngineIntegrationTest {
         engine.addProcessInterceptor(processInterceptor);
         engine.deploy(definition);
 
-        assertThatThrownBy(() -> engine.start("exception-flow", Map.of()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("boom at node T1");
+        ProcessInstance instance = engine.start("exception-flow", Map.of());
 
+        assertThat(instance.getStatus()).isEqualTo(InstanceStatus.FAILED);
+        assertThat(instance.getVariables().snapshot())
+                .containsEntry("process.error.message", "boom at node T1")
+                .containsEntry("process.error.nodeId", "T1");
         assertThat(processInterceptor.beforeStartCount.get()).isEqualTo(1);
         assertThat(processInterceptor.completedCount.get()).isEqualTo(0);
         assertThat(processInterceptor.failedCount.get()).isEqualTo(1);
@@ -338,13 +339,18 @@ class ProcessEngineIntegrationTest {
             ProcessDefinition definition = parser.parse("task-interrupt-flow", dsl);
             DefaultProcessEngine engine = new DefaultProcessEngine(new com.gaibu.flowlab.engine.store.impl.InMemoryProcessDefinitionStore(), context);
             RecordingNodeInterceptor nodeInterceptor = new RecordingNodeInterceptor();
+            RecordingProcessInterceptor processInterceptor = new RecordingProcessInterceptor();
             engine.addNodeInterceptor(nodeInterceptor);
+            engine.addProcessInterceptor(processInterceptor);
             engine.deploy(definition);
 
             ProcessInstance instanceId = engine.start("task-interrupt-flow", Map.of());
 
             assertThat(engine.getInstanceStatus(instanceId.getId())).isEqualTo(InstanceStatus.INTERRUPTED);
             assertThat(nodeInterceptor.byInstance.get(instanceId.getId())).containsExactly("S", "interruptTask");
+            assertThat(processInterceptor.beforeStartCount.get()).isEqualTo(1);
+            assertThat(processInterceptor.completedCount.get()).isEqualTo(1);
+            assertThat(processInterceptor.failedCount.get()).isEqualTo(0);
         }
     }
 
@@ -450,9 +456,11 @@ class ProcessEngineIntegrationTest {
         engine.registerTask("slowTask", ctx -> Thread.sleep(120));
         engine.deploy(definition);
 
-        assertThatThrownBy(() -> engine.start("timeout-flow", Map.of()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("FlowTask execute failed");
+        ProcessInstance instance = engine.start("timeout-flow", Map.of());
+
+        assertThat(instance.getStatus()).isEqualTo(InstanceStatus.FAILED);
+        assertThat(instance.getVariables().snapshot())
+                .containsEntry("process.error.nodeId", "slowTask");
     }
 
     @Test
@@ -492,9 +500,11 @@ class ProcessEngineIntegrationTest {
         engine.registerTask("invalidTimeoutTask", ctx -> ctx.setVariable("ok", true));
         engine.deploy(definition);
 
-        assertThatThrownBy(() -> engine.start("invalid-timeout-format-flow", Map.of()))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Invalid timeout format");
+        ProcessInstance instance = engine.start("invalid-timeout-format-flow", Map.of());
+
+        assertThat(instance.getStatus()).isEqualTo(InstanceStatus.FAILED);
+        assertThat(instance.getVariables().snapshot())
+                .containsEntry("process.error.nodeId", "invalidTimeoutTask");
     }
 
     private int countOf(List<String> nodes, String nodeId) {
