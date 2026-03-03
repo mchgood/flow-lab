@@ -44,7 +44,7 @@ class ProcessParserEdgeCaseTest {
     void shouldFailWhenUnknownNodeInAnnotation() {
         String dsl = """
                 flowchart TD
-                %% @node:X timeout=PT5M
+                %% @node:X timeout=5s
                 S(Start) --> E(End)
                 """;
 
@@ -62,5 +62,24 @@ class ProcessParserEdgeCaseTest {
 
         assertThatThrownBy(() -> parser.parse("invalid-gateway", dsl))
                 .hasMessageContaining("Unsupported gateway type");
+    }
+
+    @Test
+    void shouldSupportComplexMermaidStyleNodeId() {
+        String dsl = """
+                flowchart TD
+                _startNode(Start) --> task_001_prepare[Prepare]
+                task_001_prepare --> gateway_02_review{XOR}
+                gateway_02_review -->|approved| route_A1[Approved]
+                gateway_02_review -->|default| route_B2[Rejected]
+                route_A1 --> _endNode(End)
+                route_B2 --> _endNode
+                """;
+
+        ProcessDefinition definition = parser.parse("complex-node-id", dsl);
+
+        assertThat(definition.getNodes()).containsKeys(
+                "_startNode", "task_001_prepare", "gateway_02_review", "route_A1", "route_B2", "_endNode"
+        );
     }
 }

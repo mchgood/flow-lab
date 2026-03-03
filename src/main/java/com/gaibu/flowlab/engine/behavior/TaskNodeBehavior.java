@@ -10,6 +10,8 @@ import com.gaibu.flowlab.engine.task.context.DefaultTaskContext;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -24,6 +26,7 @@ import java.util.concurrent.TimeoutException;
  * TASK 节点行为，按 nodeId 执行对应任务。
  */
 public class TaskNodeBehavior implements NodeBehavior {
+    private static final Pattern SIMPLE_TIMEOUT_PATTERN = Pattern.compile("^(\\d+)(ms|s)$", Pattern.CASE_INSENSITIVE);
 
     /**
      * 任务注册表。
@@ -150,7 +153,18 @@ public class TaskNodeBehavior implements NodeBehavior {
         if (timeout == null) {
             return null;
         }
-        return Duration.parse(Objects.toString(timeout));
+        String raw = Objects.toString(timeout, "").trim();
+        Matcher matcher = SIMPLE_TIMEOUT_PATTERN.matcher(raw);
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException("Invalid timeout format: " + raw + ", expected like 50ms or 5s");
+        }
+
+        long value = Long.parseLong(matcher.group(1));
+        String unit = matcher.group(2).toLowerCase();
+        if ("ms".equals(unit)) {
+            return Duration.ofMillis(value);
+        }
+        return Duration.ofSeconds(value);
     }
 
     private static class TaskThreadFactory implements ThreadFactory {

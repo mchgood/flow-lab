@@ -58,6 +58,15 @@
   - `G2{AND}`
   - `G3{OR}`
 
+### 3.1.1 nodeId 命名规范（Mermaid 标识符风格）
+
+- 规则：`[A-Za-z_][A-Za-z0-9_]*`
+- 含义：
+  - 首字符只能是字母或下划线
+  - 后续字符只能是字母、数字、下划线
+- 示例（合法）：`task_001`、`_startNode`、`gateway02`
+- 示例（非法）：`task-a`、`task:a`、`1task`
+
 ### 3.2 边标签
 
 - 默认分支：`|default|`
@@ -81,7 +90,7 @@
   - 状态：已生效
   - 语义：
     - `retry`：失败重试次数（如 `retry=2` 表示最多执行 3 次）
-    - `timeout`：单次任务执行超时时间（ISO-8601 Duration，如 `PT5S`）
+    - `timeout`：单次任务执行超时时间（简化单位：`ms` 或 `s`，如 `50ms`、`5s`）
     - `async`：任务在线程池执行（线程名前缀 `flow-task-`）
 - `scope.timeout` / `scope.cancelStrategy` / `scope.onChildError`（`@scope`）：
   - 适用：网关节点

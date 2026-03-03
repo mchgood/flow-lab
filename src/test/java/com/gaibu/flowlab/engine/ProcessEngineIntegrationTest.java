@@ -229,8 +229,8 @@ class ProcessEngineIntegrationTest {
     void shouldParseAndExecuteFlowWithAnnotationDirectives() {
         String dsl = """
                 flowchart TD
-                %% @node:T1 timeout=PT5M retry=2 async=true
-                %% @scope:G1 timeout=PT10M cancelStrategy=flow onChildError=cancelAll
+                %% @node:T1 timeout=5s retry=2 async=true
+                %% @scope:G1 timeout=10s cancelStrategy=flow onChildError=cancelAll
                 S(Start) --> T1[Prepare]
                 T1 --> G1{AND}
                 G1 --> A[TaskA]
@@ -244,11 +244,11 @@ class ProcessEngineIntegrationTest {
 
         ProcessDefinition definition = parser.parse("annotation-flow", dsl);
         assertThat(definition.getNodes().get("T1").getMetadata())
-                .containsEntry("timeout", "PT5M")
+                .containsEntry("timeout", "5s")
                 .containsEntry("retry", 2)
                 .containsEntry("async", true);
         assertThat(definition.getNodes().get("G1").getMetadata())
-                .containsEntry("scope.timeout", "PT10M")
+                .containsEntry("scope.timeout", "10s")
                 .containsEntry("scope.cancelStrategy", "flow")
                 .containsEntry("scope.onChildError", "cancelAll");
 
@@ -288,6 +288,41 @@ class ProcessEngineIntegrationTest {
             assertThat(engine.getInstanceStatus(instanceId.getId())).isEqualTo(InstanceStatus.COMPLETED);
             assertThat(nodeInterceptor.byInstance.get(instanceId.getId())).containsExactly("S", "prepareTask", "G1", "A", "E");
         }
+    }
+
+    @Test
+    void shouldExecuteFlowWithComplexMermaidStyleNodeIds() {
+        String dsl = """
+                flowchart TD
+                %% @node:task_001_prepare retry=1
+                %% @node:sub_proc_node_01 subProcessId=child_complex_01
+                _startNode(Start) --> task_001_prepare[Prepare]
+                task_001_prepare --> gate_01{XOR}
+                gate_01 -->|approved| sub_proc_node_01[[Child]]
+                gate_01 -->|default| reject_01[Reject]
+                sub_proc_node_01 --> _endNode(End)
+                reject_01 --> _endNode
+                """;
+        String childDsl = """
+                flowchart TD
+                c_start(Start) --> child_task_01[ChildTask]
+                child_task_01 --> c_end(End)
+                """;
+
+        DefaultProcessEngine engine = new DefaultProcessEngine();
+        RecordingNodeInterceptor nodeInterceptor = new RecordingNodeInterceptor();
+        engine.addNodeInterceptor(nodeInterceptor);
+        engine.registerTask("task_001_prepare", context -> context.setVariable("approved", true));
+        engine.registerTask("child_task_01", context -> context.setVariable("fromChild", true));
+        engine.deploy(parser.parse("child_complex_01", childDsl));
+        engine.deploy(parser.parse("complex-node-id-flow", dsl));
+
+        ProcessInstance instance = engine.start("complex-node-id-flow", Map.of());
+
+        assertThat(engine.getInstanceStatus(instance.getId())).isEqualTo(InstanceStatus.COMPLETED);
+        assertThat(instance.getVariables().snapshot()).containsEntry("fromChild", true);
+        assertThat(nodeInterceptor.byInstance.get(instance.getId()))
+                .contains("_startNode", "task_001_prepare", "gate_01", "sub_proc_node_01", "_endNode");
     }
 
     @Test
@@ -405,7 +440,7 @@ class ProcessEngineIntegrationTest {
     void shouldFailWhenTaskTimeoutExceeded() {
         String dsl = """
                 flowchart TD
-                %% @node:slowTask timeout=PT0.05S
+                %% @node:slowTask timeout=50ms
                 S(Start) --> slowTask[SlowTask]
                 slowTask --> E(End)
                 """;
@@ -441,6 +476,25 @@ class ProcessEngineIntegrationTest {
         String taskThread = (String) instance.getVariables().get("taskThread");
         assertThat(taskThread).startsWith("flow-task-");
         assertThat(taskThread).isNotEqualTo(callerThread);
+    }
+
+    @Test
+    void shouldFailWhenTaskTimeoutFormatIsNotSimpleUnit() {
+        String dsl = """
+                flowchart TD
+                %% @node:invalidTimeoutTask timeout=PT5S
+                S(Start) --> invalidTimeoutTask[Task]
+                invalidTimeoutTask --> E(End)
+                """;
+
+        ProcessDefinition definition = parser.parse("invalid-timeout-format-flow", dsl);
+        DefaultProcessEngine engine = new DefaultProcessEngine();
+        engine.registerTask("invalidTimeoutTask", ctx -> ctx.setVariable("ok", true));
+        engine.deploy(definition);
+
+        assertThatThrownBy(() -> engine.start("invalid-timeout-format-flow", Map.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid timeout format");
     }
 
     private int countOf(List<String> nodes, String nodeId) {

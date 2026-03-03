@@ -58,7 +58,7 @@ class ProcessParserValidationTest {
     void shouldFailWhenScopeFlowWithoutTimeoutEdge() {
         String dsl = """
                 flowchart TD
-                %% @scope:G1 timeout=PT10M cancelStrategy=flow
+                %% @scope:G1 timeout=10s cancelStrategy=flow
                 S(Start) --> G1{AND}
                 G1 --> A[TaskA]
                 A --> E(End)
@@ -67,5 +67,32 @@ class ProcessParserValidationTest {
         assertThatThrownBy(() -> parser.parse("scope-flow-invalid", dsl))
                 .isInstanceOf(DefinitionException.class)
                 .hasMessageContaining("timeout edge");
+    }
+
+    @Test
+    void shouldFailWhenNodeIdContainsUnsupportedCharacters() {
+        String dsl = """
+                flowchart TD
+                S(Start) --> task-a[TaskA]
+                task-a --> E(End)
+                """;
+
+        assertThatThrownBy(() -> parser.parse("invalid-node-id-char", dsl))
+                .isInstanceOf(DefinitionException.class)
+                .hasMessageContaining("Unsupported node token");
+    }
+
+    @Test
+    void shouldFailWhenAnnotationNodeIdIsNotMermaidIdentifier() {
+        String dsl = """
+                flowchart TD
+                %% @node:task:a timeout=5s
+                S(Start) --> task_a[Task]
+                task_a --> E(End)
+                """;
+
+        assertThatThrownBy(() -> parser.parse("invalid-annotation-node-id", dsl))
+                .isInstanceOf(DefinitionException.class)
+                .hasMessageContaining("Unsupported node token");
     }
 }

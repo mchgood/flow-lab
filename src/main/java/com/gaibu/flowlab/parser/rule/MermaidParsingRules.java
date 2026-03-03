@@ -18,6 +18,13 @@ import java.util.regex.Pattern;
 public final class MermaidParsingRules {
 
     /**
+     * Mermaid 节点 ID 规则（标识符风格）。
+     *
+     * <p>约束为：字母或下划线开头，后续仅允许字母/数字/下划线。
+     */
+    private static final String NODE_ID_PATTERN_FRAGMENT = "[A-Za-z_][A-Za-z0-9_]*";
+
+    /**
      * 连线规则：`source --> target` 或 `source -->|label| target`。
      */
     private static final Pattern EDGE_PATTERN = Pattern.compile("^(.*?)-->(?:\\|(.*?)\\|)?(.*)$");
@@ -25,12 +32,12 @@ public final class MermaidParsingRules {
     /**
      * 节点增强注释规则：`%% @node:NodeId k=v ...`。
      */
-    private static final Pattern NODE_ANNOTATION_PATTERN = Pattern.compile("^%%\\s*@node:([^\\s]+)\\s*(.*)$");
+    private static final Pattern NODE_ANNOTATION_PATTERN = Pattern.compile("^%%\\s*@node:(" + NODE_ID_PATTERN_FRAGMENT + ")(?:\\s+(.*))?$");
 
     /**
      * Scope 增强注释规则：`%% @scope:GatewayId k=v ...`。
      */
-    private static final Pattern SCOPE_ANNOTATION_PATTERN = Pattern.compile("^%%\\s*@scope:([^\\s]+)\\s*(.*)$");
+    private static final Pattern SCOPE_ANNOTATION_PATTERN = Pattern.compile("^%%\\s*@scope:(" + NODE_ID_PATTERN_FRAGMENT + ")(?:\\s+(.*))?$");
 
     /**
      * 键值对规则：匹配 `k=v` 形式的属性片段。
@@ -40,27 +47,27 @@ public final class MermaidParsingRules {
     /**
      * 子流程节点规则：`Id[[SubProcess]]`。
      */
-    private static final Pattern SUB_PROCESS_NODE_PATTERN = Pattern.compile("^([A-Za-z0-9_:-]+)\\[\\[(.+)\\]\\]$");
+    private static final Pattern SUB_PROCESS_NODE_PATTERN = Pattern.compile("^(" + NODE_ID_PATTERN_FRAGMENT + ")\\[\\[(.+)\\]\\]$");
 
     /**
      * 任务节点规则：`Id[Task]`。
      */
-    private static final Pattern TASK_NODE_PATTERN = Pattern.compile("^([A-Za-z0-9_:-]+)\\[(.+)\\]$");
+    private static final Pattern TASK_NODE_PATTERN = Pattern.compile("^(" + NODE_ID_PATTERN_FRAGMENT + ")\\[(.+)\\]$");
 
     /**
      * 网关节点规则：`Id{XOR|AND|OR|...}`。
      */
-    private static final Pattern GATEWAY_NODE_PATTERN = Pattern.compile("^([A-Za-z0-9_:-]+)\\{(.+)}$");
+    private static final Pattern GATEWAY_NODE_PATTERN = Pattern.compile("^(" + NODE_ID_PATTERN_FRAGMENT + ")\\{(.+)}$");
 
     /**
      * 起止节点规则：`Id(Start)` / `Id(End)`。
      */
-    private static final Pattern START_END_NODE_PATTERN = Pattern.compile("^([A-Za-z0-9_:-]+)\\((.+)\\)$");
+    private static final Pattern START_END_NODE_PATTERN = Pattern.compile("^(" + NODE_ID_PATTERN_FRAGMENT + ")\\((.+)\\)$");
 
     /**
      * 纯节点 ID 规则：`Id`。
      */
-    private static final Pattern PLAIN_NODE_PATTERN = Pattern.compile("^([A-Za-z0-9_:-]+)$");
+    private static final Pattern PLAIN_NODE_PATTERN = Pattern.compile("^(" + NODE_ID_PATTERN_FRAGMENT + ")$");
 
     /**
      * 整数字面量规则（用于属性值类型推断）。
@@ -92,7 +99,8 @@ public final class MermaidParsingRules {
         if (!matcher.matches()) {
             return Optional.empty();
         }
-        return Optional.of(new AnnotationMatch(matcher.group(1).trim(), matcher.group(2)));
+        String attrsRaw = matcher.group(2) == null ? "" : matcher.group(2);
+        return Optional.of(new AnnotationMatch(matcher.group(1).trim(), attrsRaw));
     }
 
     /**
@@ -103,7 +111,8 @@ public final class MermaidParsingRules {
         if (!matcher.matches()) {
             return Optional.empty();
         }
-        return Optional.of(new AnnotationMatch(matcher.group(1).trim(), matcher.group(2)));
+        String attrsRaw = matcher.group(2) == null ? "" : matcher.group(2);
+        return Optional.of(new AnnotationMatch(matcher.group(1).trim(), attrsRaw));
     }
 
     /**

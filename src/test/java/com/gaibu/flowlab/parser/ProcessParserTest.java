@@ -91,8 +91,8 @@ class ProcessParserTest {
     void shouldParseComplexGraphWithGatewaysAndEnhancements() {
         String dsl = """
                 flowchart TD
-                %% @node:T1 timeout=PT5M retry=3 async=true
-                %% @scope:G2 timeout=PT10M cancelStrategy=flow onChildError=cancelAll
+                %% @node:T1 timeout=5s retry=3 async=true
+                %% @scope:G2 timeout=10s cancelStrategy=flow onChildError=cancelAll
                 S(Start) --> T1[Prepare]
                 T1 --> G1{XOR}
                 G1 -->|amount > 1000| A[HighTask]
@@ -120,12 +120,12 @@ class ProcessParserTest {
         assertThat(definition.getNodes().get("G3").getGatewayType()).isEqualTo(GatewayType.INCLUSIVE);
 
         assertThat(definition.getNodes().get("T1").getMetadata())
-                .containsEntry("timeout", "PT5M")
+                .containsEntry("timeout", "5s")
                 .containsEntry("retry", 3)
                 .containsEntry("async", true);
 
         assertThat(definition.getNodes().get("G2").getMetadata())
-                .containsEntry("scope.timeout", "PT10M")
+                .containsEntry("scope.timeout", "10s")
                 .containsEntry("scope.cancelStrategy", "flow")
                 .containsEntry("scope.onChildError", "cancelAll");
 
